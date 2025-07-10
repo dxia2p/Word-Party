@@ -1,4 +1,5 @@
 #include "set.h"
+#include "word_validator.h"
 #include <stdio.h>
 
 int main() {
@@ -47,7 +48,12 @@ int main() {
         printf("set does not contain appll\n");
     }
 
-
+    printf("Word validator testing:\n");
+    initialize_wordlist("wordlist.txt", 113809);
+    printf("word: mountain, substr: in, isvaild: %d\n", word_is_valid("mountain", "in"));
+    printf("word: thisisnotaword, substr: hello, isvaild: %d\n", word_is_valid("thisisnotaword", "hello"));
+    printf("word: river, substr: no, isvaild: %d\n", word_is_valid("river", "no"));
+    printf("word: river, substr: ri, isvaild: %d\n", word_is_valid("river", "ri"));
 
     return 0;
 }

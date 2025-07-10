@@ -1,28 +1,24 @@
 compiler := gcc
+public_objects = out/custom_protocol.o out/network_handler.o
+server_objects = out/server.o out/set.o out/word_validator.o
+client_objects = out/client.o
 
 all: bin/server bin/client
 
-bin/client: out/client.o out/custom_protocol.o
-	$(compiler) out/client.o out/custom_protocol.o -o bin/client
+bin/client: $(client_objects) $(public_objects)
+	$(compiler) $^ -o $@ -Wall -g
+$(client_objects): out/%.o: client/%.c
+	$(compiler) -c $^ -o $@ -g
 
-bin/server: out/server.o out/custom_protocol.o
-	$(compiler) out/server.o out/custom_protocol.o -o bin/server
-
-out/server.o: server/server.c
-	$(compiler) server/server.c -c -o out/server.o
-
-out/client.o: client/client.c
-	$(compiler) client/client.c -c -o out/client.o
-
-out/custom_protocol.o: include/custom_protocol.c
-	$(compiler) include/custom_protocol.c -c -o out/custom_protocol.o
+bin/server: $(server_objects) $(public_objects)
+	$(compiler) $^ -o $@ -Wall -g
+$(server_objects): out/%.o: server/%.c
+	$(compiler) -c $^ -o $@ -g
 
 
 
-
-
-
-
+$(public_objects): out/%.o: public/%.c
+	$(compiler) -c $^ -o $@ -g
 
 
 clean:

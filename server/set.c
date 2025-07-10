@@ -60,6 +60,10 @@ void set_insert(struct set *s, char *str) {
         return;
     }
     hn->val = strdup(str);
+    if (hn->val == NULL) {
+        fprintf(stderr, "strdup() failed in set_insert().\n");
+        return;
+    }
 
     if (s->buckets[hash] == NULL) {
         s->buckets[hash] = hn;
