@@ -9,12 +9,9 @@ enum Recv_Status {
     R_DISCONNECTED  // peer has disconnected
 };
 
-
 int send_to_sock(SOCKET sock, char *msg, int msg_len);
 
-
 struct receive_buffer;
-
 struct receive_buffer *create_receive_buffer();
 void delete_receive_buffer(struct receive_buffer *rb);
 enum Recv_Status recv_from_sock(SOCKET sock, struct receive_buffer *rb, char *msg, int msg_max_len);

@@ -279,6 +279,9 @@ void process_server_command(char *msg) {
             strcpy(get_player_from_id(id)->name, name);
             break;
         }
+        case GAME_START: {
+            game_started = true;
+        }
         default:
             printf("Invalid msg code (%d).\n", code);
             break;
@@ -337,6 +340,13 @@ void remove_player(int id) {
 void display_players() {
     printf("%s", "\x1b[2J");  // Clear screen
     printf("\x1b[H");  // Move cursor to home
+    
+
+    if (game_started) {
+        printf("The game has started!\n\n");
+    }
+
+
     printf("Players in the game are\n");
     printf("\x1b[4m");  // set underline mode
 

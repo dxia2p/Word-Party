@@ -7,22 +7,12 @@
 #include "custom_protocol.h"
 #include "network_header.h"
 
-const char *protocol_format_strs[] = {  // This array dictates what body is allowed with each code
-    [WORD_INCORRECT] = "",
-    [WORD_CORRECT] = "",
-    [SEND_WORD] = "s",
-    [LOSE_HP] = "",
-    [PLAYER_JOIN] = "ds",
-    [PLAYER_LEFT] = "d",
-    [SEND_NAME] = "s",
-    [PLAYER_CHANGED_NAME] = "ds",
-    [LEAVE] = "",
-    [GAME_FULL] = "",
-    [GAME_NOT_FULL] = "",
-};
 
-const char *get_format_string_from_code(enum Msg_Codes c) {
-    return protocol_format_strs[c];
+const char *get_format_string_from_code(char **protocol_fmt_strs, int fmt_strs_size, char c) {
+    if (c >= fmt_strs_size || c < 0) {
+        fprintf(stderr, "Invalid msg_code passed to get_format_string_from_code() (%d)\n", c);
+    }
+    return protocol_fmt_strs[c];
 }
 
 
@@ -39,57 +29,21 @@ int get_msg_len(char *msg) {  // TODO: FIX UNDEFINED BEHAVIOUR WHEN MSG_END IS N
     return (strchr(msg, MSG_END) - msg) + 1;
 }
 
-enum Msg_Codes get_msg_code(char *msg){
-    return (enum Msg_Codes)msg[0];
+char get_msg_code(char *msg){
+    return msg[0];
 }
-
-/*
-// Returns the number of values parsed from msg_body
-// msg_body SHOULD BE AN ENTIRE UNMODIFIED MESSAGE!
-// Doesn't modify msg
-int separate_msg_body(char *msg, char values_buf[][50], int values_buf_size) {
-    char *msg_end = strchr(msg, MSG_END);
-    if (msg_end == msg + 1) return 0;  // If there is no body return 0
-    if (msg_end == NULL) {
-        fprintf(stderr, "Malformed message\n");
-        return -1;
-    }
-
-    msg++;  // skip past the code
-    
-    int cur = 0;  // Tracks which index of values_buf we're on
-    char *separator_p = strchr(msg, MSG_VAL_SEP);
-    while(separator_p != NULL) {
-        if(cur >= values_buf_size) {
-            fprintf(stderr, "values_buf in separate_msg_val() does not have enough space!\n");
-            return -1;
-        }
-        
-        strncpy(values_buf[cur], msg, separator_p - msg);
-        values_buf[cur][separator_p - msg] = '\0';
-        cur++;
-        msg = separator_p;
-        msg++;
-        separator_p = strchr(msg, MSG_VAL_SEP);
-    }
-    strncpy(values_buf[cur], msg, msg_end - msg);
-    values_buf[cur][msg_end - msg] = '\0';
-    cur++;
-    return cur;
-}
-*/
 
 
 // Pass in pointers to int, string, or float
 // Make sure strings passed in are modifiable arrays
-void parse_msg_body(char *msg, ...) {
-    enum Msg_Codes code = msg[0];
-    const char *fmt = get_format_string_from_code(code);
+void parse_msg_body(char *msg, char**protocol_fmt_strs, int fmt_strs_size, ...) {
+    char code = get_msg_code(msg);
+    const char *fmt = get_format_string_from_code(protocol_fmt_strs, fmt_strs_size, code);
 
     msg++; // Skip past the code
 
     va_list list;
-    va_start(list, msg);
+    va_start(list, fmt_strs_size);
     for (int i = 0; fmt[i] != '\0'; i++) {
         char temp_buf[64];
         int temp_index = 0;
@@ -152,13 +106,13 @@ void parse_msg_body(char *msg, ...) {
 
 // Returns size of msg created
 // fmt should only contain s, d, or f!
-int create_msg(char *buf, int buf_size, enum Msg_Codes msg_code, ...) {
-    const char *fmt = get_format_string_from_code(msg_code);
+int create_msg(char *buf, int buf_size, char msg_code, char **protocol_fmt_strs, int fmt_strs_len, ...) {
+    const char *fmt = get_format_string_from_code(protocol_fmt_strs, fmt_strs_len, msg_code);
     buf[0] = msg_code;
     int buf_pos = 1;
 
     va_list list;
-    va_start(list, msg_code);
+    va_start(list, fmt_strs_len);
 
     for (int i = 0; fmt[i] != '\0'; i++) {
         char arg[64];

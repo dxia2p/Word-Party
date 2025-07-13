@@ -1,6 +1,6 @@
 compiler := gcc
 public_objects = out/custom_protocol.o out/network_handler.o
-server_objects = out/server.o out/set.o out/word_validator.o
+server_objects = out/set.o out/word_validator.o out/server_main.o out/server_networking.o out/server_logic.o out/message_queue.o
 client_objects = out/client.o
 
 all: bin/server bin/client

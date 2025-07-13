@@ -18,8 +18,6 @@
 // Function prototypes
 SOCKET create_server(char *hostname, char *port);
 SOCKET wait_for_client(SOCKET socket_listen);
-//int recv_from_client(SOCKET client_socket, char *msg);
-//void send_to_client(SOCKET player_socket, char *msg, int msg_len);
 struct client_data *create_client_data(SOCKET client_socket, char *name);
 void remove_client_data(SOCKET client_socket);
 struct client_data *get_client_data_from_socket(SOCKET client_socket);
@@ -41,6 +39,7 @@ struct client_data {
 
 static struct client_data *clients = NULL;  // Linked list containing all clients
 static int player_count = 0;
+static bool game_started = false;
 
 int main() {
     #if defined(_WIN32)
@@ -89,6 +88,9 @@ int main() {
             if (strcmp(server_input, GAME_START_CMD) == 0) {
                 printf("Starting game...\n");
                 // do stuff to start the game
+                game_started = true;
+                int msg_size = create_msg(msg_buf, sizeof(msg_buf), GAME_START);
+                send_to_all(msg_buf, msg_size);
             } else if (strcmp(server_input, QUIT_CMD) == 0) {
                 printf("Quitting...\n");
                 break;
@@ -155,7 +157,6 @@ int main() {
                 enum Recv_Status status = recv_from_sock(cur->sock, cur->rb, recv_buf, sizeof(recv_buf));
                 while (status != R_INCOMPLETE && status != R_DISCONNECTED) {  // Keep reading until there is nothing left to read
                     process_client_command(recv_buf, cur);
-                    printf("%d: %s\n", cur->sock, recv_buf);
                     if (status == R_SINGLE_COMPLETE) {
                         break;
                     }
@@ -186,7 +187,7 @@ int main() {
     return 0;
 }
 
-
+/* I/O */
 
 SOCKET create_server(char *hostname, char *port) {
     printf("Configuring server address...\n");
@@ -249,68 +250,6 @@ SOCKET wait_for_client(SOCKET socket_listen) {
     return socket_client;
 }
 
-
-/*
-// parameter msg should have a size larger than or equal to MAX_CLIENT_BUF_SIZE
-// return values: -1 = client has disconencted
-// 0 = Has not received complete message
-// 1 = received complete message
-
-int recv_from_client(SOCKET client_socket, char *msg) {
-    // Find the correct client_data corresponding to client_socket
-    struct client_data *cd = get_client_data_from_socket(client_socket);
-    
-    // Check if there is already a complete message in cd->recv_buf
-    if (is_message_complete(cd->recv_buf, cd->bytes_received)) {
-        int len = get_msg_len(cd->recv_buf);  // len is the index of MSG_END
-        strncpy(msg, cd->recv_buf, len);
-        if (len != MAX_CLIENT_BUF_SIZE) {
-            memmove(cd->recv_buf, cd->recv_buf + len, MAX_CLIENT_BUF_SIZE - len);
-        }
-        cd->bytes_received -= len;
-        return 1;
-    }
-
-    // receive data from client
-    int msg_bytes = recv(client_socket, cd->recv_buf + cd->bytes_received, MAX_CLIENT_BUF_SIZE - cd->bytes_received, 0);
-    if (msg_bytes == 0) {
-        return -1;
-    }
-    cd->bytes_received += msg_bytes;
-
-    // Check if the message is complete
-    // If it is, return true and put the message in char *msg
-    // If not, return false and do nothing to char *msg
-    if (is_message_complete(cd->recv_buf, cd->bytes_received)) {
-        int len = get_msg_len(cd->recv_buf);  // len is the index of MSG_END
-        strncpy(msg, cd->recv_buf, len);
-        if (len != MAX_CLIENT_BUF_SIZE) {
-            memmove(cd->recv_buf, cd->recv_buf + len, MAX_CLIENT_BUF_SIZE - len);
-        }
-        cd->bytes_received -= len;
-        return 1;
-    }
-    return 0;
-}
-*/
-
-
-/*
-// Use custom_protocol.h's create_msg() to format the message properly
-void send_to_client(SOCKET player_socket, char *msg, int msg_len) {
-    int bytes_sent = 0;
-    do {
-        int msg_bytes = send(player_socket, msg + bytes_sent, msg_len - bytes_sent, 0);
-
-        if (msg_bytes == -1) {
-            fprintf(stderr, "send_to_player() failed. (%d)\n", GETSOCKETERRNO());
-            exit(1);
-        }
-        bytes_sent += msg_bytes;
-
-    } while (bytes_sent < msg_len);
-}
-*/
 
 struct client_data *create_client_data(SOCKET client_socket, char *name) {
     struct client_data *temp = calloc(1, sizeof(struct client_data));
@@ -411,4 +350,10 @@ void process_client_command(char *msg, struct client_data *cd) {
             fprintf(stderr, "Invalid message code! (%d)\n", code);
             break;
     }
+}
+
+
+/* Logic */
+void logic_main() {
+
 }

@@ -17,7 +17,7 @@ int main() {
     }
 
 
-    printf("Set testing:\n");
+    printf("\nSet testing:\n");
     struct set *s = set_create(100000);
     set_insert(s, "apple");
     set_insert(s, "banana");
@@ -48,12 +48,14 @@ int main() {
         printf("set does not contain appll\n");
     }
 
-    printf("Word validator testing:\n");
+    printf("\nWord validator testing:\n");
     initialize_wordlist("wordlist.txt", 113809);
     printf("word: mountain, substr: in, isvaild: %d\n", word_is_valid("mountain", "in"));
     printf("word: thisisnotaword, substr: hello, isvaild: %d\n", word_is_valid("thisisnotaword", "hello"));
     printf("word: river, substr: no, isvaild: %d\n", word_is_valid("river", "no"));
     printf("word: river, substr: ri, isvaild: %d\n", word_is_valid("river", "ri"));
+
+
 
     return 0;
 }
