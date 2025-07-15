@@ -18,12 +18,12 @@ enum Message_Boundaries {
     MSG_VAL_SEP = '&',
 };
 
-const char *get_format_string_from_code(char **protocol_fmt_strs, int fmt_strs_size, char c);
+const char *get_format_string_from_code(const char **protocol_fmt_strs, int fmt_strs_len, char c);
 char get_msg_code(char *msg);
 bool is_message_complete(char *msg, int msg_len);
 int get_msg_len(char *msg);
-void parse_msg_body(char *msg, char**protocol_fmt_strs, int fmt_strs_size, ...);
-int create_msg(char *buf, int buf_size, char msg_code, char **protocol_fmt_strs, int fmt_strs_len, ...);
+void parse_msg_body(char *msg, const char**protocol_fmt_strs, int fmt_strs_size, ...);
+int create_msg(char *buf, int buf_size, char msg_code, const char **protocol_fmt_strs, int fmt_strs_len, ...);
 void print_msg(char *msg);
 
 #endif

@@ -1,6 +1,8 @@
 #include "server_logic.h"
 #include "server_networking.h"
 #include "message_queue.h"
+#include "thread_protocol_codes.h"
+#include "../public/custom_protocol.h"
 
 #include <stdbool.h>
 #include <stdio.h>

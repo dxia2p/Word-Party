@@ -1,6 +1,7 @@
 #include "../public/network_header.h"
 #include "../public/custom_protocol.h"
 #include "../public/network_handler.h"
+#include "../public/network_protocol_codes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,7 +63,7 @@ int main() {
     char send_buf[512];
     while (recv_from_sock(socket_serv, server_rb, recv_buffer, sizeof(recv_buffer)) == R_INCOMPLETE);
 
-    if (get_msg_code(recv_buffer) == GAME_FULL){
+    if (get_msg_code(recv_buffer) == N_GAME_FULL){
         fprintf(stderr, "Game is full!\n");
         return 1;
     }
@@ -81,7 +82,7 @@ int main() {
         return 1;
     }
 
-    int msg_len = create_msg(send_buf, sizeof(send_buf), SEND_NAME, my_name);
+    int msg_len = create_msg(send_buf, sizeof(send_buf), N_SEND_NAME, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), my_name);
     send_to_sock(socket_serv, send_buf, msg_len);
     printf("Submitted name to server!\n");
 
@@ -167,78 +168,6 @@ SOCKET connect_to_server(char *hostname, char *port) {
     return socket_serv;
 }
 
-
-
-/*
- 
-//This function assumes that server_socket is ready to be read from, it will block otherwise
-//enum Recv_Status indicates if an incomplete message was received, one complete message was received, or more than one complete message was received
-
-enum Recv_Status recv_from_server(SOCKET server_socket, char *msg, int msg_max_len) {     
-    static char buffer[512];
-    static int total_bytes = 0;
-
-    // check if there is already a complete message in the buffer (in case we received 2 or more complete messages combined into 1
-    if (is_message_complete(buffer, total_bytes)) { int len = get_msg_len(buffer); strncpy(msg, buffer, len); if (len != sizeof(buffer)) {
-            memmove(buffer, buffer + len, sizeof(buffer) - len);  // TODO: CLEAR STUFF AFTER MOVING IT
-            memset(buffer + (total_bytes - len), 0, sizeof(buffer) - (total_bytes - len));
-        }
-        total_bytes -= len;
-        if (is_message_complete(buffer, total_bytes)) {
-            return R_MULTIPLE_COMPLETE;
-        }
-        
-        return R_SINGLE_COMPLETE;
-    }
-    
-    int msg_bytes = recv(server_socket, buffer + total_bytes, sizeof(buffer) - total_bytes, 0);
-    if (msg_bytes == 0) {
-        fprintf(stderr, "Unexpected shutdown.\n");
-        exit(1);
-    }
-    total_bytes += msg_bytes;
-
-
-//printf("recv_from_server contents (%d bytes): %.*s\n", total_bytes, total_bytes, buffer);
-    
-    // Check if the message is complete
-    if (is_message_complete(buffer, total_bytes)) {
-        int len = get_msg_len(buffer);
-        strncpy(msg, buffer, len);
-        if (len != sizeof(buffer)) {
-            memmove(buffer, buffer + len, sizeof(buffer) - len);
-            memset(buffer + (total_bytes - len), 0, sizeof(buffer) - (total_bytes - len));
-        }
-        total_bytes -= len;
-        if (is_message_complete(buffer, total_bytes)) {
-            return R_MULTIPLE_COMPLETE;
-        }
-        
-        return R_SINGLE_COMPLETE;
-    }
-
-
-    return R_INCOMPLETE;
-}
-*/
-
-/*
-void send_to_server(SOCKET server_socket, char *msg, int msg_len) {  
-    int bytes_sent = 0;
-    do {
-        int msg_bytes = send(server_socket, msg + bytes_sent, msg_len - bytes_sent, 0);
-        
-        if (msg_bytes == -1) {
-            fprintf(stderr, "send_to_server() failed. (%d)\n", GETSOCKETERRNO());
-            exit(1);
-        }
-        bytes_sent += msg_bytes;
-
-    } while (bytes_sent < msg_len);
-}
-*/
-
-
 void process_server_command(char *msg) {
     char code = get_msg_code(msg);
     
@@ -250,36 +179,36 @@ void process_server_command(char *msg) {
     */
 
     switch(code) {
-        case WORD_CORRECT: {
+        case N_CORRECT_WORD: {
             break;
         }
-        case WORD_INCORRECT: {
+        case N_INCORRECT_WORD: {
             break;
         }
-        case LOSE_HP: {
+        case N_LOSE_HP: {
             break;
         }
-        case PLAYER_JOIN: { // id&name
+        case N_PLAYER_JOIN: { // id&name
             int id;
             char name[26];
-            parse_msg_body(msg, &id, name);
+            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), &id, name);
             create_player(id, name);
             break;
         }            
-        case PLAYER_LEFT: {  //id
+        case N_PLAYER_LEFT: {  //id
             int id;
-            parse_msg_body(msg, &id);
+            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), &id);
             remove_player(id);
             break;
         }
-        case PLAYER_CHANGED_NAME: {  //id&name
+        case N_PLAYER_CHANGED_NAME: {  //id&name
             int id;
             char name[26];
-            parse_msg_body(msg, &id, name);
+            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), &id, name);
             strcpy(get_player_from_id(id)->name, name);
             break;
         }
-        case GAME_START: {
+        case N_GAME_START: {
             game_started = true;
         }
         default:

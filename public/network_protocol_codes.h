@@ -16,7 +16,7 @@ enum Network_Msg_Codes{
     N_GAME_START,  // Server sends to client
 };
 
-static const char *protocol_format_strs[] = {      
+static const char *net_protocol_fmtstrs[] = {      
     [N_INCORRECT_WORD] = "",
     [N_CORRECT_WORD] = "",
     [N_SEND_WORD] = "s",

@@ -6,6 +6,7 @@
 #include "message_queue.h"
 #include "thread_protocol_codes.h"
 
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -86,12 +87,12 @@ void* networking_main_routine(void *queue_group) {
             // HANDLE THINGS IF PLAYER COUNT IS FULL
             if (client_count == MAX_CLIENT_COUNT) {
                 printf("Reached max player count. Dropping player (%d)...\n", client_socket);
-                int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_FULL);
+                int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_FULL, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs));
                 send_to_sock(client_socket, send_buf, msg_size);
                 CLOSESOCKET(client_socket);
                 continue;
             }
-            int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_NOT_FULL);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_NOT_FULL, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs));
 
             FD_SET(client_socket, &master);
             if(client_socket > max_socket) {
@@ -101,8 +102,9 @@ void* networking_main_routine(void *queue_group) {
             create_client_data(client_socket);
             client_count++;
             printf("NEW CLIENT HAS JOINED!!!!\n");
-            msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, client_socket, "Unnamed");
+            msg_size = create_msg(send_buf, sizeof(send_buf), T_PLAYER_JOIN, thread_protocol_fmtstrs, sizeof(thread_protocol_fmtstrs), client_socket, "Unnamed");
             message_enqueue(write_queue, send_buf, msg_size);
+            msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), client_socket, "Unnamed");
             send_to_all(send_buf, msg_size);
 
             // Send the names of all existing players to the new player 
@@ -112,7 +114,7 @@ void* networking_main_routine(void *queue_group) {
                     cur = cur->next;
                     continue;
                 }  
-                msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, cur->sock, "Unnamed");
+                msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), cur->sock, "Unnamed");
                 //print_msg(msg_buf);
                 send_to_sock(client_socket, send_buf, msg_size);
                 cur = cur->next;
@@ -132,7 +134,7 @@ void* networking_main_routine(void *queue_group) {
                     status = recv_from_sock(cur->sock, cur->rb, recv_buf, sizeof(recv_buf));
                 }
                 if (status == R_DISCONNECTED) {
-                    int msg_size = create_msg(send_buf, sizeof(send_buf), PLAYER_LEFT, cur->sock);
+                    int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_LEFT, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), cur->sock);
                     send_to_all_except_one(send_buf, msg_size, cur->sock);
                     FD_CLR(cur->sock, &master);
                     remove_client_data(cur->sock);
@@ -267,15 +269,29 @@ void send_to_all_except_one(char *msg, int msg_len, SOCKET except_this_socket) {
 static void process_client_command(char *msg, struct client_data *cd) {
     char code = get_msg_code(msg);
     int len = get_msg_len(msg);
-    //static char temp_buf[512];
+    static char send_buf[256];
+    static char recv_str[256];
 
     switch(code){
+        case N_SEND_NAME: {
+            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), recv_str);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), T_SEND_NAME, thread_protocol_fmtstrs, sizeof(thread_protocol_fmtstrs), cd->sock, recv_str);
+            message_enqueue(write_queue, send_buf, msg_size);
+            break;
+        }
         default:
-            message_enqueue(write_queue, msg, len);
+            // Do something
             break;
     }
 }
 
 static void process_thread_command(char *msg) {
+    char code = get_msg_code(msg);
+    int len = get_msg_len(msg);
+    static char temp_buf[256];
 
+    switch (code) {
+        default:
+            break;
+    }
 }

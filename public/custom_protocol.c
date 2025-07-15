@@ -8,8 +8,8 @@
 #include "network_header.h"
 
 
-const char *get_format_string_from_code(char **protocol_fmt_strs, int fmt_strs_size, char c) {
-    if (c >= fmt_strs_size || c < 0) {
+const char *get_format_string_from_code(const char **protocol_fmt_strs, int fmt_strs_len, char c) {
+    if (c >= fmt_strs_len || c < 0) {
         fprintf(stderr, "Invalid msg_code passed to get_format_string_from_code() (%d)\n", c);
     }
     return protocol_fmt_strs[c];
@@ -36,7 +36,7 @@ char get_msg_code(char *msg){
 
 // Pass in pointers to int, string, or float
 // Make sure strings passed in are modifiable arrays
-void parse_msg_body(char *msg, char**protocol_fmt_strs, int fmt_strs_size, ...) {
+void parse_msg_body(char *msg, const char**protocol_fmt_strs, int fmt_strs_size, ...) {
     char code = get_msg_code(msg);
     const char *fmt = get_format_string_from_code(protocol_fmt_strs, fmt_strs_size, code);
 
@@ -51,6 +51,11 @@ void parse_msg_body(char *msg, char**protocol_fmt_strs, int fmt_strs_size, ...) 
             temp_buf[temp_index] = *msg;
             temp_index++;
             msg++;
+            if (temp_index > sizeof(temp_buf) - 2) {
+                temp_buf[temp_index] = '\0';
+                fprintf(stderr, "value (%s) is too large for parse_msg_body()!\n", temp_buf);
+                return;
+            }
         }
         if (*msg == MSG_END && fmt[i + 1] != '\0') {
             fprintf(stderr, "Received message (%s) is too short for code (%d)\n", msg, code);
@@ -58,6 +63,8 @@ void parse_msg_body(char *msg, char**protocol_fmt_strs, int fmt_strs_size, ...) 
         msg++; // Skip past MSG_VAL_SEP
         temp_buf[temp_index] = '\0';
         temp_index++;
+
+        
 
         // Determine what type the argument is 
         switch (fmt[i]) {
@@ -106,7 +113,7 @@ void parse_msg_body(char *msg, char**protocol_fmt_strs, int fmt_strs_size, ...) 
 
 // Returns size of msg created
 // fmt should only contain s, d, or f!
-int create_msg(char *buf, int buf_size, char msg_code, char **protocol_fmt_strs, int fmt_strs_len, ...) {
+int create_msg(char *buf, int buf_size, char msg_code, const char **protocol_fmt_strs, int fmt_strs_len, ...) {
     const char *fmt = get_format_string_from_code(protocol_fmt_strs, fmt_strs_len, msg_code);
     buf[0] = msg_code;
     int buf_pos = 1;
