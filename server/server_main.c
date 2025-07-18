@@ -1,8 +1,6 @@
 #include "server_logic.h"
 #include "server_networking.h"
 #include "message_queue.h"
-#include "thread_protocol_codes.h"
-#include "../public/custom_protocol.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -28,9 +26,44 @@ int main() {
         return 1;
     }
 
+    struct timespec prev_time;
+    clock_gettime(CLOCK_MONOTONIC, &prev_time);
+    double deltatime = 0;
+
     while (game_running) {
+        struct timespec frame_begin_time;
+        clock_gettime(CLOCK_MONOTONIC, &frame_begin_time);
+
         // Do stuff
-        game_update();
+        game_update(deltatime);
+
+
+        struct timespec frame_end_time;
+        clock_gettime(CLOCK_MONOTONIC, &frame_end_time);
+        struct timespec wait_time;
+        wait_time.tv_sec = frame_end_time.tv_sec - frame_begin_time.tv_sec;
+        wait_time.tv_nsec = frame_end_time.tv_nsec - frame_begin_time.tv_nsec;
+        if (wait_time.tv_sec > 0 && wait_time.tv_nsec < 0) {
+            wait_time.tv_nsec += 1e9;
+            wait_time.tv_sec--;
+        }
+        double target_frametime = 1.0/30.0;
+        struct timespec remaining, requested = {.tv_sec = 0, .tv_nsec = target_frametime * 1e9 - wait_time.tv_nsec };
+        nanosleep(&requested, &remaining);
+        
+        struct timespec cur_time;
+        clock_gettime(CLOCK_MONOTONIC, &cur_time);
+        struct timespec frame_time;
+        frame_time.tv_sec = cur_time.tv_sec - prev_time.tv_sec;
+        frame_time.tv_nsec = cur_time.tv_nsec - prev_time.tv_nsec;
+        if (frame_time.tv_sec > 0 && frame_time.tv_nsec < 0) {
+            frame_time.tv_nsec += 1e9;
+            frame_time.tv_sec--;
+        }
+        deltatime = frame_time.tv_sec;
+        deltatime += ((double)frame_time.tv_nsec) / 1e9;
+        prev_time = cur_time;
+        // printf("frame_time.tv_sec: %ld, frame_time.tv_nsec: %ld, deltatime %f\n", frame_time.tv_sec, frame_time.tv_nsec, deltatime);
     }
     
     if (pthread_join(networking_thread, NULL) != 0) {

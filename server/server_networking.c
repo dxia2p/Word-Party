@@ -17,6 +17,7 @@
 struct client_data {
     SOCKET sock;   // same as id in server_logic's player_data
     struct receive_buffer *rb;
+    char name[26];
     struct client_data *next;
 };
 
@@ -84,41 +85,45 @@ void* networking_main_routine(void *queue_group) {
         // A new client is ready to join
         if (FD_ISSET(socket_listen, &reads)) {
             SOCKET client_socket = wait_for_client(socket_listen);
-            // HANDLE THINGS IF PLAYER COUNT IS FULL
+            // PLAYER COUNT IS FULL
             if (client_count == MAX_CLIENT_COUNT) {
                 printf("Reached max player count. Dropping player (%d)...\n", client_socket);
-                int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_FULL, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs));
+                int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_FULL, &NET_PROT_FMT_STR_STORAGE);
                 send_to_sock(client_socket, send_buf, msg_size);
                 CLOSESOCKET(client_socket);
                 continue;
             }
-            int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_NOT_FULL, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs));
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_NOT_FULL, &NET_PROT_FMT_STR_STORAGE);
+            send_to_sock(client_socket, send_buf, msg_size);
 
             FD_SET(client_socket, &master);
             if(client_socket > max_socket) {
                 max_socket = client_socket;
             }
 
-            create_client_data(client_socket);
-            client_count++;
             printf("NEW CLIENT HAS JOINED!!!!\n");
-            msg_size = create_msg(send_buf, sizeof(send_buf), T_PLAYER_JOIN, thread_protocol_fmtstrs, sizeof(thread_protocol_fmtstrs), client_socket, "Unnamed");
+            msg_size = create_msg(send_buf, sizeof(send_buf), T_PLAYER_JOIN, &THREAD_PROT_FMT_STR_STORAGE, client_socket);
             message_enqueue(write_queue, send_buf, msg_size);
-            msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), client_socket, "Unnamed");
-            send_to_all(send_buf, msg_size);
 
             // Send the names of all existing players to the new player 
             struct client_data *cur = clients;
             while (cur != NULL) {
-                if (cur->sock == client_socket) {  // Don't send the new client's name to themselves
-                    cur = cur->next;
-                    continue;
-                }  
-                msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), cur->sock, "Unnamed");
+                msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, &NET_PROT_FMT_STR_STORAGE, cur->sock, cur->name);
                 //print_msg(msg_buf);
                 send_to_sock(client_socket, send_buf, msg_size);
                 cur = cur->next;
             }
+
+            create_client_data(client_socket);
+            client_count++;
+
+            // Tell everyone new player has joined
+            msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_JOIN, &NET_PROT_FMT_STR_STORAGE, client_socket, "Unnamed");
+            send_to_all(send_buf, msg_size);
+
+            // Send the new client their id
+            msg_size = create_msg(send_buf, sizeof(send_buf), N_SEND_ID, &NET_PROT_FMT_STR_STORAGE, client_socket);
+            send_to_sock(client_socket, send_buf, msg_size);
         }
 
         struct client_data *cur = clients;
@@ -134,8 +139,10 @@ void* networking_main_routine(void *queue_group) {
                     status = recv_from_sock(cur->sock, cur->rb, recv_buf, sizeof(recv_buf));
                 }
                 if (status == R_DISCONNECTED) {
-                    int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_LEFT, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), cur->sock);
+                    int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_LEFT, &NET_PROT_FMT_STR_STORAGE, cur->sock);
                     send_to_all_except_one(send_buf, msg_size, cur->sock);
+                    msg_size = create_msg(send_buf, sizeof(send_buf), T_PLAYER_LEFT, &THREAD_PROT_FMT_STR_STORAGE, cur->sock);
+                    message_enqueue(write_queue, send_buf, msg_size);
                     FD_CLR(cur->sock, &master);
                     remove_client_data(cur->sock);
                     CLOSESOCKET(cur->sock);
@@ -274,13 +281,14 @@ static void process_client_command(char *msg, struct client_data *cd) {
 
     switch(code){
         case N_SEND_NAME: {
-            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), recv_str);
-            int msg_size = create_msg(send_buf, sizeof(send_buf), T_SEND_NAME, thread_protocol_fmtstrs, sizeof(thread_protocol_fmtstrs), cd->sock, recv_str);
-            message_enqueue(write_queue, send_buf, msg_size);
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, recv_str);
+            strcpy(cd->name, recv_str);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_CHANGED_NAME, &NET_PROT_FMT_STR_STORAGE, cd->sock, recv_str);
+            send_to_all(send_buf, msg_size);
             break;
         }
         default:
-            // Do something
+            fprintf(stderr, "Invalid msg code in process_client_command() (%d)\n", code);
             break;
     }
 }
@@ -288,10 +296,37 @@ static void process_client_command(char *msg, struct client_data *cd) {
 static void process_thread_command(char *msg) {
     char code = get_msg_code(msg);
     int len = get_msg_len(msg);
-    static char temp_buf[256];
+    static char recv_str[256];
+    static char send_buf[256];
 
     switch (code) {
+        case T_GAME_START: {  // Game start command from logic thread
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_START, &NET_PROT_FMT_STR_STORAGE);
+            send_to_all(send_buf, msg_size);
+            break;
+        }
+        case T_SEND_REQ_STR: {
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, recv_str);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_SEND_REQ_STR, &NET_PROT_FMT_STR_STORAGE, recv_str);
+            send_to_all(send_buf, msg_size);
+            break;
+        }
+        case T_TURN_TIME: {
+            double t;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &t);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_TURN_TIME, &NET_PROT_FMT_STR_STORAGE, t);
+            send_to_all(send_buf, msg_size);
+            break;
+        }
+        case T_PLAYER_TURN: {
+            int id;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_TURN, &NET_PROT_FMT_STR_STORAGE, id);
+            send_to_all(send_buf, msg_size);
+            break;
+        }
         default:
+            fprintf(stderr, "Invalid msg code in server_networking's process_thread_command() (%d)\n", code);
             break;
     }
 }

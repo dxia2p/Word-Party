@@ -10,8 +10,6 @@
 
 /* Function prototypes */
 SOCKET connect_to_server(char *hostname, char *port);
-//enum Recv_Status recv_from_server(SOCKET server_socket, char *msg, int msg_max_len);
-//void send_to_server(SOCKET server_socket, char *msg, int msg_len);
 void process_server_command(char *msg);
 struct player_data *create_player(int id, const char *name);
 void remove_player(int id);
@@ -24,10 +22,15 @@ struct player_data {
     struct player_data *next;
 };
 
+/* Variables */
 // Linked list of all players
 static struct player_data *players;
-bool game_started = false;
-struct player_data *player_turn;
+static int my_id;
+static bool game_started = false;
+static struct player_data *player_turn;
+static char req_substr[4] = {'\0'};
+static double time_left = -1.0;
+
 
 int main() {
     #if defined(_WIN32)
@@ -38,7 +41,6 @@ int main() {
     }
     #endif
 
-    // Obtain server's address
     char hostname[100];
     char port[6];
     sprintf(hostname, "127.0.0.1");
@@ -82,7 +84,7 @@ int main() {
         return 1;
     }
 
-    int msg_len = create_msg(send_buf, sizeof(send_buf), N_SEND_NAME, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), my_name);
+    int msg_len = create_msg(send_buf, sizeof(send_buf), N_SEND_NAME, &NET_PROT_FMT_STR_STORAGE, my_name);
     send_to_sock(socket_serv, send_buf, msg_len);
     printf("Submitted name to server!\n");
 
@@ -168,63 +170,13 @@ SOCKET connect_to_server(char *hostname, char *port) {
     return socket_serv;
 }
 
-void process_server_command(char *msg) {
-    char code = get_msg_code(msg);
-    
-    /*
-    printf("Val count: %d\n", val_count);
-    for (int i = 0; i < val_count; i++) {
-        printf("msg_val: %s\n", separated_values[i]);
-    }
-    */
-
-    switch(code) {
-        case N_CORRECT_WORD: {
-            break;
-        }
-        case N_INCORRECT_WORD: {
-            break;
-        }
-        case N_LOSE_HP: {
-            break;
-        }
-        case N_PLAYER_JOIN: { // id&name
-            int id;
-            char name[26];
-            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), &id, name);
-            create_player(id, name);
-            break;
-        }            
-        case N_PLAYER_LEFT: {  //id
-            int id;
-            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), &id);
-            remove_player(id);
-            break;
-        }
-        case N_PLAYER_CHANGED_NAME: {  //id&name
-            int id;
-            char name[26];
-            parse_msg_body(msg, net_protocol_fmtstrs, sizeof(net_protocol_fmtstrs), &id, name);
-            strcpy(get_player_from_id(id)->name, name);
-            break;
-        }
-        case N_GAME_START: {
-            game_started = true;
-        }
-        default:
-            printf("Invalid msg code (%d).\n", code);
-            break;
-    }
-}
-
-
 struct player_data *get_player_from_id(int id) {
     struct player_data *cur = players;
     while (cur != NULL) {
         if (cur->id == id) return cur;
         cur = cur->next;
     }
-    fprintf(stderr, "get_player_from_id() could not find player (%d!)\n", id);
+    fprintf(stderr, "get_player_from_id() could not find player (%d)!\n", id);
     return NULL;
 }
 
@@ -238,10 +190,22 @@ struct player_data *create_player(int id, const char *name) {
     strcpy(temp->name, name);
     temp->id = id;
 
+    /*
     // Add temp to the front of players linked list
     temp->next = players;
     players = temp;
-    
+    */
+    // Add temp to the end of players linked list to keep order consistent
+    if (players != NULL) {
+        struct player_data *cur = players;
+        while (cur->next != NULL) {
+            cur = cur->next;
+        }
+        cur->next = temp;
+    } else {
+        players = temp;
+    }
+   
     return temp;
 }
 
@@ -270,21 +234,110 @@ void display_players() {
     printf("%s", "\x1b[2J");  // Clear screen
     printf("\x1b[H");  // Move cursor to home
     
+    printf("+---------------------------------------------------------------------------+\n");
 
     if (game_started) {
         printf("The game has started!\n\n");
     }
 
-
     printf("Players in the game are\n");
-    printf("\x1b[4m");  // set underline mode
 
     struct player_data *cur = players;
     while (cur != NULL) {
-        printf("%s\t", cur->name);
+        if (cur == player_turn) {
+            printf("\x1b[1;36m%s\x1b[0m\t", cur->name);
+        } else {
+            printf("\x1b[4m%s\x1b[0m\t", cur->name);
+        }
         cur = cur->next;
     }
 
+    if (game_started) {
+        printf("\n\n");
+        printf("It's \x1b[1;36m%s\x1b[0m's turn.\n\n", player_turn->name);
+        printf("Their word must contain \x1b[32;1m[%s]\x1b[0m.\n\n", req_substr);
+        printf("You have \x1b[31;1m%.2lf\x1b[0m seconds left!\n", time_left);
+    }
+
+    printf("\n+---------------------------------------------------------------------------+\n");
+
+    if (game_started && player_turn->id == my_id) {
+        printf("It's your turn! Enter a word containing \x1b[32;1m[%s]\x1b[0m: ", req_substr);
+        fflush(stdout);
+    }
+
     printf("\x1b[0m");
-    printf("\n");
 }
+
+void process_server_command(char *msg) {
+    char code = get_msg_code(msg);
+    
+    /*
+    printf("Val count: %d\n", val_count);
+    for (int i = 0; i < val_count; i++) {
+        printf("msg_val: %s\n", separated_values[i]);
+    }
+    */
+
+    switch(code) {
+        case N_SEND_REQ_STR: {
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, req_substr);
+            break;
+        }
+        case N_CORRECT_WORD: {
+            break;
+        }
+        case N_INCORRECT_WORD: {
+            break;
+        }
+        case N_LOSE_HP: {
+            break;
+        }
+        case N_PLAYER_JOIN: { // id&name
+            int id;
+            char name[26];
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id, name);
+            printf("id: %d\n", id);
+            create_player(id, name);
+            break;
+        }            
+        case N_PLAYER_LEFT: {  //id
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
+            remove_player(id);
+            break;
+        }
+        case N_PLAYER_CHANGED_NAME: {  //id&name
+            int id;
+            char name[26];
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id, name);
+            strcpy(get_player_from_id(id)->name, name);
+            break;
+        }
+        case N_GAME_START: {
+            game_started = true;
+            break;
+        }
+        case N_TURN_TIME: {
+            double t;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &t);
+            time_left = t;
+            break;
+        } case N_PLAYER_TURN: {
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
+            player_turn = get_player_from_id(id);
+            break;
+        } case N_SEND_ID: {
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
+            my_id = id;
+            break;
+        }
+        default:
+            fprintf(stderr, "Invalid msg code in process_server_command() (%d).\n", code);
+            break;
+    }
+}
+
+
