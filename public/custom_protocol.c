@@ -8,11 +8,11 @@
 #include "network_header.h"
 
 
-const char *get_format_string_from_code(const char **protocol_fmt_strs, int fmt_strs_len, char c) {
-    if (c >= fmt_strs_len || c < 0) {
+const char *get_format_string_from_code(const struct cust_protocol_fmt_str_storage *s, const char c) {
+    if (c >= s->len || c < 0) {
         fprintf(stderr, "Invalid msg_code passed to get_format_string_from_code() (%d)\n", c);
     }
-    return protocol_fmt_strs[c];
+    return s->format_strs[c];
 }
 
 
@@ -26,7 +26,13 @@ bool is_message_complete(char *msg, int msg_len) {
 
 // includes msg_end in the length
 int get_msg_len(char *msg) {  // TODO: FIX UNDEFINED BEHAVIOUR WHEN MSG_END IS NOT IN MSG
-    return (strchr(msg, MSG_END) - msg) + 1;
+    static int MAX_CHECK_NUM = 512;
+    for (int i = 0; i < MAX_CHECK_NUM; i++) {
+        if (msg[i] == MSG_END) {
+            return i + 1;
+        }
+    }
+    return -1;
 }
 
 char get_msg_code(char *msg){
@@ -36,14 +42,14 @@ char get_msg_code(char *msg){
 
 // Pass in pointers to int, string, or float
 // Make sure strings passed in are modifiable arrays
-void parse_msg_body(char *msg, const char**protocol_fmt_strs, int fmt_strs_size, ...) {
+void parse_msg_body(char *msg, const struct cust_protocol_fmt_str_storage *fmt_strs, ...) {
     char code = get_msg_code(msg);
-    const char *fmt = get_format_string_from_code(protocol_fmt_strs, fmt_strs_size, code);
+    const char *fmt = get_format_string_from_code(fmt_strs, code);
 
     msg++; // Skip past the code
 
     va_list list;
-    va_start(list, fmt_strs_size);
+    va_start(list, fmt_strs);
     for (int i = 0; fmt[i] != '\0'; i++) {
         char temp_buf[64];
         int temp_index = 0;
@@ -113,13 +119,13 @@ void parse_msg_body(char *msg, const char**protocol_fmt_strs, int fmt_strs_size,
 
 // Returns size of msg created
 // fmt should only contain s, d, or f!
-int create_msg(char *buf, int buf_size, char msg_code, const char **protocol_fmt_strs, int fmt_strs_len, ...) {
-    const char *fmt = get_format_string_from_code(protocol_fmt_strs, fmt_strs_len, msg_code);
+int create_msg(char *buf, int buf_size, char msg_code, const struct cust_protocol_fmt_str_storage *fmt_strs, ...) {
+    const char *fmt = get_format_string_from_code(fmt_strs, msg_code);
     buf[0] = msg_code;
     int buf_pos = 1;
 
     va_list list;
-    va_start(list, fmt_strs_len);
+    va_start(list, fmt_strs);
 
     for (int i = 0; fmt[i] != '\0'; i++) {
         char arg[64];

@@ -4,7 +4,7 @@
 
 unsigned long djb2_hash(char *str);
 
-struct hash_node;
+//struct hash_node;
 struct set;
 struct set *set_create(unsigned long bucket_num);
 void set_insert(struct set *s, char *str);

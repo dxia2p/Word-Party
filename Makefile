@@ -7,18 +7,18 @@ all: bin/server bin/client
 
 bin/client: $(client_objects) $(public_objects)
 	$(compiler) $^ -o $@ -Wall -g
-$(client_objects): out/%.o: client/%.c
-	$(compiler) -c $^ -o $@ -g
+$(client_objects): out/%.o: client/%.c public/*.h
+	$(compiler) -c $(filter %.c,$^) -o $@ -g
 
 bin/server: $(server_objects) $(public_objects)
 	$(compiler) $^ -o $@ -Wall -g
-$(server_objects): out/%.o: server/%.c
-	$(compiler) -c $^ -o $@ -g
+$(server_objects): out/%.o: server/%.c public/*.h server/*.h
+	$(compiler) -c $(filter %.c,$^) -o $@ -g
 
 
 
-$(public_objects): out/%.o: public/%.c
-	$(compiler) -c $^ -o $@ -g
+$(public_objects): out/%.o: public/%.c public/*.h
+	$(compiler) -c $(filter %.c,$^) -o $@ -g
 
 
 clean:
