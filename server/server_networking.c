@@ -163,6 +163,11 @@ SOCKET create_server(char *hostname, char *port) {
         fprintf(stderr, "getaddrinfo() failed. (%d)\n", getaddrinfo_code);
         exit(1);
     }
+    
+    char host[64];
+    char service[64];
+    getnameinfo(bind_address->ai_addr, bind_address->ai_addrlen, host, sizeof(host), service, sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+    printf("Server is starting on %s:%s\n", host, service);
 
     printf("Creating socket...\n");
     SOCKET socket_listen = socket(bind_address->ai_family, bind_address->ai_socktype, bind_address->ai_protocol);
@@ -358,6 +363,15 @@ static void process_thread_command(char *msg) {
             int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_WON, &NET_PROT_FMT_STR_STORAGE, id);
             send_to_all(send_buf, msg_size);
             break;
+        } case T_RESTART_GAME: {
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_RESTART_GAME, &NET_PROT_FMT_STR_STORAGE);
+            send_to_all(send_buf, msg_size);
+            break;
+        } case T_GAME_STARTED_NO_JOINING: {
+            int id;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_GAME_STARTED_NO_JOINING, &NET_PROT_FMT_STR_STORAGE);
+            send_to_sock(id, send_buf, msg_size);
         }
         default:
             fprintf(stderr, "Invalid msg code in server_networking's process_thread_command() (%d)\n", code);

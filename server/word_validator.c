@@ -20,12 +20,12 @@ char *index_substrs(int index) {
     return substrs + (index * (MAX_SUBSTR_LEN + 1));
 }
 
-void initialize_substr_list(char *filepath) {
+bool initialize_substr_list(char *filepath) {
     int lines = 0;
     FILE *fptr = fopen(filepath, "r");
     if (fptr == NULL) {
         fprintf(stderr, "failed to open file at %s in initialize_substr_list() (%d)\n", filepath, errno);
-        return;
+        return false;
     }
     while (!feof(fptr)) {
         char ch = fgetc(fptr);
@@ -43,6 +43,8 @@ void initialize_substr_list(char *filepath) {
         *strchr(temp_buf, '\n') = '\0';
         strcpy(index_substrs(i), temp_buf);
     }
+
+    return true;
 }
 
 // This function assumes srand() has already been called
@@ -51,12 +53,12 @@ char *get_random_required_substr() {
 }
 
 // Words are separated by newline
-void initialize_wordlist(char *filepath) {
+bool initialize_wordlist(char *filepath) {
     
     FILE *fptr = fopen(filepath, "r");
     if (fptr == NULL) {
         fprintf(stderr, "fopen() in initialize_wordlist() failed.\n");
-        return;
+        return false;
     }
 
     unsigned long lines = 0;
@@ -84,6 +86,7 @@ void initialize_wordlist(char *filepath) {
     }
 
     printf("Initialized wordlist. (size: %lu)\n", set_get_size(word_set));
+    return true;
 }
 
 /* the word must be in wordlist and contain substr*/

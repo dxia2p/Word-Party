@@ -26,6 +26,7 @@ struct player_data {
 
 /* Function prototypes */
 static void game_start();
+static void game_restart();
 static void next_turn(bool successful);
 static void lose_hp(struct player_data *p);
 static int get_alive_player_count();
@@ -56,11 +57,11 @@ void game_init(struct message_queue_group *queue_group, bool test) {
     srand(time(NULL));
 
     if (test) {
-        initialize_substr_list("../server/assets/substr_list.txt");  // Change this to /assets/substr_list.txt when releasing game
-        initialize_wordlist("../server/assets/wordlist2.txt");
+        if (!initialize_substr_list("../server/assets/substr_list.txt")) exit(1);
+        if (!initialize_wordlist("../server/assets/wordlist2.txt")) exit(1);
     } else {
-        initialize_substr_list("assets/substr_list.txt");
-        initialize_wordlist("assets/wordlist2.txt");
+        if (!initialize_substr_list("assets/substr_list.txt")) exit(1);
+        if (!initialize_wordlist("assets/wordlist2.txt")) exit(1);
     }
 }
 
@@ -97,6 +98,7 @@ void game_update(double deltatime) {
                 // Tell everyone this player won
                 int msg_size = create_msg(mq_buf, sizeof(mq_buf), T_PLAYER_WON, &THREAD_PROT_FMT_STR_STORAGE, player_turn->id);
                 message_enqueue(write_queue, mq_buf, msg_size);
+                game_restart();
             }
         } else {
             turn_timer -= deltatime;
@@ -117,6 +119,21 @@ void game_update(double deltatime) {
 static void game_start() {
     game_started = true;
     next_turn(true);
+}
+
+static void game_restart() {
+    static char send_buf[128];
+    struct player_data *cur = players;
+    while (cur != NULL) {
+        cur->hp = MAX_HP;
+        cur = cur->next;
+    }
+    start_turn_timer = MAX_TURN_TIMER;
+    game_started = false;
+    turn_timer = 0;
+    player_turn = NULL;
+    int msg_size = create_msg(send_buf, sizeof(send_buf), T_RESTART_GAME, &THREAD_PROT_FMT_STR_STORAGE);
+    message_enqueue(write_queue, send_buf, msg_size);
 }
 
 static void next_turn(bool successful) {
@@ -260,8 +277,14 @@ static void process_thread_command(char *msg) {
 
     switch(code){
         case T_PLAYER_JOIN: {
+
             int id;
             parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);      
+            if (game_started) {
+                int msg_size = create_msg(send_buf, sizeof(send_buf), T_GAME_STARTED_NO_JOINING, &THREAD_PROT_FMT_STR_STORAGE, id);
+                message_enqueue(write_queue, send_buf, msg_size);
+                break;
+            }
             create_player_data(id);
             printf("Created player data (id: %d) in logic thread!\n", id);
             break;
@@ -306,12 +329,16 @@ static void process_thread_command(char *msg) {
 
 // Processes commands from STDIN
 static void process_terminal_command(char *cmd) {
+    static char msg_buf[256];
     if (strcmp(cmd, "start") == 0) {  // Start game
-        static char msg_buf[256];
+        if (get_alive_player_count() < 2) {
+            printf("Not enough players to start! (need at least 2).\n");
+            return;
+        }
         game_start();
         int msg_size = create_msg(msg_buf, sizeof(msg_buf), T_GAME_START, &THREAD_PROT_FMT_STR_STORAGE);
         message_enqueue(write_queue, msg_buf, msg_size);
     } else {  // Invalid
-        fprintf(stderr, "Invalid command!\n");
+        fprintf(stderr, "Invalid command (type \"start\" to start).\n");
     }
 }

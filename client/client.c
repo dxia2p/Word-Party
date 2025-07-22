@@ -37,6 +37,7 @@ struct player_data *create_player(int id, const char *name);
 void remove_player(int id);
 struct player_data *get_player_from_id(int id);
 void display_ui(char *input);
+static void restart_game();
 
 /* Variables */
 struct termios original_termios;
@@ -73,6 +74,9 @@ int main(int argc, char *argv[]) {
     }
     
     SOCKET socket_serv = connect_to_server(hostname, port);
+    if (socket_serv == -1) {
+        return 1;
+    }
 
     // Turn off nagles algorithm
     int yes = 1;
@@ -130,7 +134,10 @@ int main(int argc, char *argv[]) {
 
     while(1) {
         fd_set reads = master;
-        if (select(max_socket + 1, &reads, 0, 0, 0) < 0) {
+        struct timeval tv;
+        tv.tv_sec = 1;
+        tv.tv_usec = 0;
+        if (select(max_socket + 1, &reads, 0, 0, &tv) < 0) {
             fprintf(stderr, "select() failed. (%d)\n", GETSOCKETERRNO());
             return 1;
         } 
@@ -150,24 +157,27 @@ int main(int argc, char *argv[]) {
 
         }
 
-        if (FD_ISSET(STDIN_FILENO, &reads) && game_started) {  // STDIN is ready for reading
+        if (FD_ISSET(STDIN_FILENO, &reads)) {  // STDIN is ready for reading
             char c;
             read(STDIN_FILENO, &c, 1);
-            input[input_len] = c;
-            input_len++;
-            input[input_len] = '\0';
-
-            if (input[input_len - 1] == '\n') {
-                process_terminal_input(input, input_len, socket_serv);
-                input_len = 0;
-                input[0] = '\0';
-            } else if (input[input_len - 1] == '\b') {
-                input_len -= 2;
+            if (game_started) {
+                input[input_len] = c;
+                input_len++;
                 input[input_len] = '\0';
-            } else if (input_len >= sizeof(input) - 1) {
-                input_len = 0;
-                input[0] = '\0';
+
+                if (input[input_len - 1] == '\n') {
+                    process_terminal_input(input, input_len, socket_serv);
+                    input_len = 0;
+                    input[0] = '\0';
+                } else if (input[input_len - 1] == '\b') {
+                    input_len -= 2;
+                    input[input_len] = '\0';
+                } else if (input_len >= sizeof(input) - 1) {
+                    input_len = 0;
+                    input[0] = '\0';
+                }
             }
+            
         }
 
         /* user interface */
@@ -280,20 +290,20 @@ SOCKET connect_to_server(char *hostname, char *port) {
     struct addrinfo *server_address;
     if (getaddrinfo(hostname, port, &hints, &server_address)) {
         fprintf(stderr, "getaddrinfo() failed. (%d)\n", GETSOCKETERRNO());
-        return 1;
+        return -1;
     }
 
     printf("Creating socket...\n");
     SOCKET socket_serv = socket(server_address->ai_family, server_address->ai_socktype, server_address->ai_protocol);
     if (!ISVALIDSOCKET(socket_serv)) {
         fprintf(stderr, "socket() failed. (%d)\n", GETSOCKETERRNO());
-        return 1;
+        return -1;
     }
 
     printf("Connecting to server...\n");
     if (connect(socket_serv, server_address->ai_addr, server_address->ai_addrlen) != 0) {
         fprintf(stderr, "connect() failed. (%d)\n", GETSOCKETERRNO());
-        return 1;
+        return -1;
     }
     freeaddrinfo(server_address);
 
@@ -375,6 +385,9 @@ void display_ui(char *input) {
         } else {
             printf("\x1b[4m");
         }
+        if (cur->id == my_id) {
+            printf("\x1b[38;5;82m");
+        }
         if (cur == player_turn) {
             printf("\x1b[1;36m");
         }
@@ -386,11 +399,14 @@ void display_ui(char *input) {
 
     if (game_started) {
         printf("\n\n");
-        printf("It's \x1b[1;36m%s\x1b[0m's turn.\n\n", player_turn->name);
-        printf("Their word must contain \x1b[32;1m[%s]\x1b[0m.\n\n", req_substr);
+        
         if(player_turn->id == my_id) {
+            printf("It's \x1b[1;36myour\x1b[0m turn!\n\n");
+            printf("Your word must contain \x1b[32;1m[%s]\x1b[0m.\n\n", req_substr);
             printf("You have \x1b[31;1m%.2lf\x1b[0m seconds left!\n", time_left);
         } else {
+            printf("It's \x1b[1;36m%s\x1b[0m's turn.\n\n", player_turn->name);
+            printf("Their word must contain \x1b[32;1m[%s]\x1b[0m.\n\n", req_substr);
             printf("They have \x1b[31;1m%.2lf\x1b[0m seconds left!\n", time_left);
         }
     }
@@ -451,7 +467,6 @@ void process_server_command(char *msg) {
             int id;
             char name[26];
             parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id, name);
-            printf("id: %d\n", id);
             create_player(id, name);
             break;
         }            
@@ -499,8 +514,16 @@ void process_server_command(char *msg) {
             int id;
             parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
             struct player_data *p = get_player_from_id(id);
-            snprintf(temp_buf, sizeof(temp_buf), "THE WINNER IS %s!!!", p->name);
-            create_alert(temp_buf, 10.0);
+            snprintf(temp_buf, sizeof(temp_buf), "\x1b[32;1mTHE WINNER IS %s!!!\x1b[0m", p->name);
+            create_alert(temp_buf, 15.0);
+            break;
+        } case N_RESTART_GAME: {
+            restart_game();
+            break;
+        } case N_GAME_STARTED_NO_JOINING: {
+            printf("Cannot join because the game has already started.\n");
+            exit(1);
+            break;
         }
         default:
             fprintf(stderr, "Invalid msg code in process_server_command() (%d).\n", code);
@@ -508,4 +531,12 @@ void process_server_command(char *msg) {
     }
 }
 
-
+static void restart_game() {
+    game_started = false;
+    player_turn = NULL;
+    struct player_data *cur = players;
+    while (cur != NULL) {
+        cur->hp = MAX_HP;
+        cur = cur->next;
+    }
+}

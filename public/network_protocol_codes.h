@@ -13,7 +13,6 @@ enum Network_Msg_Codes{
     N_PLAYER_LEFT,  // id
     N_SEND_NAME,  // for client to send to server
     N_PLAYER_CHANGED_NAME,  // <id>, <name> for server to send to all clients
-    N_LEAVE,  // for client to send to server
     N_GAME_FULL,  // Server sends to client
     N_GAME_NOT_FULL,  // Server sends to client
     N_GAME_START,  // Server sends to client
@@ -21,6 +20,8 @@ enum Network_Msg_Codes{
     N_PLAYER_TURN,
     N_SEND_ID,  // For server to send to client, tells the client what id they are
     N_PLAYER_WON,
+    N_RESTART_GAME,
+    N_GAME_STARTED_NO_JOINING,
 };
 
 static const char *net_protocol_fmtstrs[] = {      
@@ -33,7 +34,6 @@ static const char *net_protocol_fmtstrs[] = {
     [N_PLAYER_LEFT] = "d",
     [N_SEND_NAME] = "s",
     [N_PLAYER_CHANGED_NAME] = "ds",
-    [N_LEAVE] = "",
     [N_GAME_FULL] = "",
     [N_GAME_NOT_FULL] = "",
     [N_GAME_START] = "",
@@ -41,6 +41,8 @@ static const char *net_protocol_fmtstrs[] = {
     [N_PLAYER_TURN] = "d",
     [N_SEND_ID] = "d",
     [N_PLAYER_WON] = "d",
+    [N_RESTART_GAME] = "",
+    [N_GAME_STARTED_NO_JOINING] = "",
 };
 
 static const struct cust_protocol_fmt_str_storage NET_PROT_FMT_STR_STORAGE = {

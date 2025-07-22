@@ -36,6 +36,8 @@ int main( int argc, char *argv[]) {
     clock_gettime(CLOCK_MONOTONIC, &prev_time);
     double deltatime = 0;
 
+    printf("Type \"start\" to start the game once 2 or more players have joined.\n");
+
     while (game_running) {
         struct timespec frame_begin_time;
         clock_gettime(CLOCK_MONOTONIC, &frame_begin_time);
