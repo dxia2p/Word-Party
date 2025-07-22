@@ -41,9 +41,10 @@ enum Recv_Status recv_from_sock(SOCKET sock, struct receive_buffer *rb, char *ms
     // check if there is already a complete message in the buffer (in case we received 2 or more complete messages combined into 1
     if (is_message_complete(rb->received, rb->bytes_received)) {
         int len = get_msg_len(rb->received);
-        strncpy(msg, rb->received, len);
+        //strncpy(msg, rb->received, len);
+        memcpy(msg, rb->received, len);
         if (len != sizeof(rb->received)) {
-            memmove(rb->received, rb->received + len, sizeof(rb->received) - len);  // TODO: CLEAR STUFF AFTER MOVING IT
+            memmove(rb->received, rb->received + len, sizeof(rb->received) - len);
             memset(rb->received + (rb->bytes_received - len), 0, sizeof(rb->received) - (rb->bytes_received - len));
         }
         rb->bytes_received -= len;
@@ -67,9 +68,10 @@ enum Recv_Status recv_from_sock(SOCKET sock, struct receive_buffer *rb, char *ms
     // Check if the message is complete
         if (is_message_complete(rb->received, rb->bytes_received)) {
         int len = get_msg_len(rb->received);
-        strncpy(msg, rb->received, len);
+        //strncpy(msg, rb->received, len);
+        memcpy(msg, rb->received, len);
         if (len != sizeof(rb->received)) {
-            memmove(rb->received, rb->received + len, sizeof(rb->received) - len);  // TODO: CLEAR STUFF AFTER MOVING IT
+            memmove(rb->received, rb->received + len, sizeof(rb->received) - len);
             memset(rb->received + (rb->bytes_received - len), 0, sizeof(rb->received) - (rb->bytes_received - len));
         }
         rb->bytes_received -= len;

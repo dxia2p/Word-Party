@@ -20,14 +20,15 @@ enum Network_Msg_Codes{
     N_TURN_TIME,  // Server sends to client how much time they have
     N_PLAYER_TURN,
     N_SEND_ID,  // For server to send to client, tells the client what id they are
+    N_PLAYER_WON,
 };
 
 static const char *net_protocol_fmtstrs[] = {      
-    [N_INCORRECT_WORD] = "",
-    [N_CORRECT_WORD] = "",
+    [N_INCORRECT_WORD] = "d",
+    [N_CORRECT_WORD] = "ds",
     [N_SEND_WORD] = "s",
     [N_SEND_REQ_STR] = "s",
-    [N_LOSE_HP] = "",
+    [N_LOSE_HP] = "d",
     [N_PLAYER_JOIN] = "ds",
     [N_PLAYER_LEFT] = "d",
     [N_SEND_NAME] = "s",
@@ -39,6 +40,7 @@ static const char *net_protocol_fmtstrs[] = {
     [N_TURN_TIME] = "f",
     [N_PLAYER_TURN] = "d",
     [N_SEND_ID] = "d",
+    [N_PLAYER_WON] = "d",
 };
 
 static const struct cust_protocol_fmt_str_storage NET_PROT_FMT_STR_STORAGE = {

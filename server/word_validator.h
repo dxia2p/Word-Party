@@ -5,7 +5,7 @@
 char *index_substrs(int index);
 void initialize_substr_list(char *filepath);
 char *get_random_required_substr();
-void initialize_wordlist(char *filepath, unsigned long lines_in_wordlist);
+void initialize_wordlist(char *filepath);
 bool word_is_valid(char *word, char *substr);
 
 #endif

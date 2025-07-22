@@ -7,32 +7,48 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/select.h>
+#include <termios.h>
+#include <time.h>
+
+static const int MAX_HP = 3;
+
+struct player_data {
+    char name[25];
+    int id;
+    int hp;
+    struct player_data *next;
+};
+struct alert {
+    char str[128];
+    double time_left;
+    struct alert *next;
+};
 
 /* Function prototypes */
+void update_alerts(double deltatime);  // Updates and draws alerts
+void create_alert(char *msg, double time_to_live);
+void destroy_alert(struct alert *a, struct alert *prev);
+void enable_raw_input();
+void disable_raw_input();
+void process_terminal_input(char *inp, int len, SOCKET server_sock);
 SOCKET connect_to_server(char *hostname, char *port);
 void process_server_command(char *msg);
 struct player_data *create_player(int id, const char *name);
 void remove_player(int id);
 struct player_data *get_player_from_id(int id);
-void display_players();
-
-struct player_data {
-    char name[25];
-    int id;
-    struct player_data *next;
-};
+void display_ui(char *input);
 
 /* Variables */
-// Linked list of all players
-static struct player_data *players;
+struct termios original_termios;
+static struct player_data *players = NULL;  // Linked list of all players
 static int my_id;
 static bool game_started = false;
-static struct player_data *player_turn;
+static struct player_data *player_turn = NULL;
 static char req_substr[4] = {'\0'};
 static double time_left = -1.0;
+static struct alert *alerts = NULL;
 
-
-int main() {
+int main(int argc, char *argv[]) {
     #if defined(_WIN32)
     WSADATA d;
     if (WSAStartup(MAKEWORD(2, 2), &d)) {
@@ -43,15 +59,19 @@ int main() {
 
     char hostname[100];
     char port[6];
-    sprintf(hostname, "127.0.0.1");
-    sprintf(port, "8080");
-    //printf("Enter hostname: ");
-    //scanf("%99s", hostname);
-    //getchar();
-    //printf("Enter port: ");
-    //scanf("%5s", port);
-    //getchar();
 
+    if (argc > 1 && strcmp(argv[1], "test") == 0) {
+        sprintf(hostname, "127.0.0.1");
+        sprintf(port, "8080"); 
+    } else {
+        printf("Enter hostname: ");
+        scanf("%99s", hostname);
+        getchar();
+        printf("Enter port: ");
+        scanf("%5s", port);
+        getchar();
+    }
+    
     SOCKET socket_serv = connect_to_server(hostname, port);
 
     // Turn off nagles algorithm
@@ -88,8 +108,7 @@ int main() {
     send_to_sock(socket_serv, send_buf, msg_len);
     printf("Submitted name to server!\n");
 
-
-    // Multiplexing so that stdin and the server's socket doesn't block
+    /* Multiplexing */
     fd_set master;
     FD_ZERO(&master);
     FD_SET(socket_serv, &master);
@@ -99,6 +118,16 @@ int main() {
         max_socket = STDIN_FILENO;
     }
 
+    /* Terminal input */
+    char input[128] = {'\0'};
+    int input_len = 0;
+    enable_raw_input();
+
+    /* frametime */
+    struct timespec prev_time;
+    clock_gettime(CLOCK_MONOTONIC, &prev_time);
+    double deltatime = 0;
+
     while(1) {
         fd_set reads = master;
         if (select(max_socket + 1, &reads, 0, 0, 0) < 0) {
@@ -106,7 +135,7 @@ int main() {
             return 1;
         } 
 
-        if (FD_ISSET(socket_serv, &master)) {  // server socket is ready for reading
+        if (FD_ISSET(socket_serv, &reads)) {  // server socket is ready for reading
             enum Recv_Status status = recv_from_sock(socket_serv, server_rb, recv_buffer, sizeof(recv_buffer));
             while (status != R_INCOMPLETE && status != R_DISCONNECTED) {  // Keep reading until there is nothing left to read
                 process_server_command(recv_buffer);
@@ -119,12 +148,46 @@ int main() {
                 return 1;
             }
 
-            display_players();
         }
 
-        if (FD_ISSET(STDIN_FILENO, &master)) {  // STDIN is ready for reading
+        if (FD_ISSET(STDIN_FILENO, &reads) && game_started) {  // STDIN is ready for reading
+            char c;
+            read(STDIN_FILENO, &c, 1);
+            input[input_len] = c;
+            input_len++;
+            input[input_len] = '\0';
 
+            if (input[input_len - 1] == '\n') {
+                process_terminal_input(input, input_len, socket_serv);
+                input_len = 0;
+                input[0] = '\0';
+            } else if (input[input_len - 1] == '\b') {
+                input_len -= 2;
+                input[input_len] = '\0';
+            } else if (input_len >= sizeof(input) - 1) {
+                input_len = 0;
+                input[0] = '\0';
+            }
         }
+
+        /* user interface */
+        display_ui(input);
+        update_alerts(deltatime);
+
+        /* frametime */
+        struct timespec cur_time;
+        clock_gettime(CLOCK_MONOTONIC, &cur_time);
+        struct timespec frame_time;
+        frame_time.tv_sec = cur_time.tv_sec - prev_time.tv_sec;
+        frame_time.tv_nsec = cur_time.tv_nsec - prev_time.tv_nsec;
+        if (frame_time.tv_sec > 0 && frame_time.tv_nsec < 0) {
+            frame_time.tv_nsec += 1e9;
+            frame_time.tv_sec--;
+        }
+        deltatime = frame_time.tv_sec;
+        deltatime += ((double)frame_time.tv_nsec) / 1e9;
+        prev_time = cur_time;
+        // printf("frame_time.tv_sec: %ld, frame_time.tv_nsec: %ld, deltatime %f\n", frame_time.tv_sec, frame_time.tv_nsec, deltatime);
     }
 
     /* cleanup */
@@ -139,6 +202,73 @@ int main() {
     return 0;
 }
 
+void update_alerts(double deltatime) {
+    printf("\n");
+    struct alert *cur = alerts;
+    struct alert *prev = NULL;
+    while (cur != NULL) {
+        cur->time_left -= deltatime;
+        if (cur->time_left <= 0) {
+            destroy_alert(cur, prev);
+            cur = cur->next;
+            continue;
+        }
+        
+        printf("\x1b[3m%s\n\x1b[0m", cur->str);
+
+        prev = cur;
+        cur = cur->next;
+    }
+}
+
+void create_alert(char *msg, double time_to_live) {
+    struct alert *temp = malloc(sizeof(struct alert));
+    if (temp == NULL) {
+        fprintf(stderr, "Failed to malloc() in create_alert()\n");
+        return;
+    }
+    strcpy(temp->str, msg);
+    temp->time_left = time_to_live;
+    if (alerts == NULL) {
+        alerts = temp;
+    }
+    else {
+        temp->next = alerts;
+        alerts = temp;
+    }
+}
+
+void destroy_alert(struct alert *a, struct alert *prev) {
+    if (prev == NULL) {
+        alerts = alerts->next;
+    } else {
+        prev->next = a->next;
+    }
+
+    free(a);
+}
+
+void enable_raw_input() {
+    tcgetattr(STDIN_FILENO, &original_termios);
+    atexit(disable_raw_input);
+
+    struct termios raw = original_termios;
+    raw.c_lflag &= ~(ECHO | ICANON);  // ICANON isn't an input flag for some reason
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+}
+
+void disable_raw_input() {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
+}
+
+// This function just sends inp to server for now
+// Might add more commands later
+void process_terminal_input(char *inp, int len, SOCKET server_sock) {
+    inp[len - 1] = '\0';  // Remove newline
+    static char msg_buf[128];
+    int msg_size = create_msg(msg_buf, sizeof(msg_buf), N_SEND_WORD, &NET_PROT_FMT_STR_STORAGE, inp);
+    send_to_sock(server_sock, msg_buf, msg_size);
+}
 
 
 SOCKET connect_to_server(char *hostname, char *port) {
@@ -189,12 +319,8 @@ struct player_data *create_player(int id, const char *name) {
 
     strcpy(temp->name, name);
     temp->id = id;
+    temp->hp = MAX_HP;
 
-    /*
-    // Add temp to the front of players linked list
-    temp->next = players;
-    players = temp;
-    */
     // Add temp to the end of players linked list to keep order consistent
     if (players != NULL) {
         struct player_data *cur = players;
@@ -230,8 +356,8 @@ void remove_player(int id) {
     free(cur);
 }
 
-void display_players() {
-    printf("%s", "\x1b[2J");  // Clear screen
+void display_ui(char *input) {
+    printf("\x1b[2J\x1b[3J");  // Clear screen
     printf("\x1b[H");  // Move cursor to home
     
     printf("+---------------------------------------------------------------------------+\n");
@@ -244,11 +370,17 @@ void display_players() {
 
     struct player_data *cur = players;
     while (cur != NULL) {
-        if (cur == player_turn) {
-            printf("\x1b[1;36m%s\x1b[0m\t", cur->name);
+        if (cur->hp <= 0) {
+            printf("\x1b[2m");
         } else {
-            printf("\x1b[4m%s\x1b[0m\t", cur->name);
+            printf("\x1b[4m");
         }
+        if (cur == player_turn) {
+            printf("\x1b[1;36m");
+        }
+        
+        printf("%s\x1b[0m (hp: %d)\t", cur->name, cur->hp);
+        
         cur = cur->next;
     }
 
@@ -256,20 +388,28 @@ void display_players() {
         printf("\n\n");
         printf("It's \x1b[1;36m%s\x1b[0m's turn.\n\n", player_turn->name);
         printf("Their word must contain \x1b[32;1m[%s]\x1b[0m.\n\n", req_substr);
-        printf("You have \x1b[31;1m%.2lf\x1b[0m seconds left!\n", time_left);
+        if(player_turn->id == my_id) {
+            printf("You have \x1b[31;1m%.2lf\x1b[0m seconds left!\n", time_left);
+        } else {
+            printf("They have \x1b[31;1m%.2lf\x1b[0m seconds left!\n", time_left);
+        }
     }
 
     printf("\n+---------------------------------------------------------------------------+\n");
 
-    if (game_started && player_turn->id == my_id) {
+    if (player_turn != NULL && game_started && player_turn->id == my_id) {
         printf("It's your turn! Enter a word containing \x1b[32;1m[%s]\x1b[0m: ", req_substr);
-        fflush(stdout);
     }
+
+    printf("%s", input);
+    fflush(stdout);
 
     printf("\x1b[0m");
 }
 
 void process_server_command(char *msg) {
+    static const double default_alert_ttl = 3.5;
+
     char code = get_msg_code(msg);
     
     /*
@@ -279,18 +419,32 @@ void process_server_command(char *msg) {
     }
     */
 
+    static char temp_buf[128];
+    static char recv_buf[128];
+
     switch(code) {
         case N_SEND_REQ_STR: {
             parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, req_substr);
             break;
         }
         case N_CORRECT_WORD: {
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id, recv_buf);
+            if (id == my_id) {
+                snprintf(temp_buf, sizeof(temp_buf), "You entered a correct word! (%s)", recv_buf);
+                create_alert(temp_buf, default_alert_ttl);
+            } else {
+                snprintf(temp_buf, sizeof(temp_buf), "%s entered %s, which is correct!", get_player_from_id(id)->name, recv_buf);
+                create_alert(temp_buf, default_alert_ttl);
+            }
             break;
         }
         case N_INCORRECT_WORD: {
-            break;
-        }
-        case N_LOSE_HP: {
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
+            if (id == my_id) {
+                create_alert("Invalid word!", default_alert_ttl);
+            }
             break;
         }
         case N_PLAYER_JOIN: { // id&name
@@ -333,6 +487,20 @@ void process_server_command(char *msg) {
             parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
             my_id = id;
             break;
+        } case N_LOSE_HP: {
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
+            struct player_data *p = get_player_from_id(id);
+            p->hp--;
+            snprintf(temp_buf, sizeof(temp_buf), "%s has lost one hp!", p->name);
+            create_alert(temp_buf, default_alert_ttl);
+            break;
+        } case N_PLAYER_WON: {
+            int id;
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, &id);
+            struct player_data *p = get_player_from_id(id);
+            snprintf(temp_buf, sizeof(temp_buf), "THE WINNER IS %s!!!", p->name);
+            create_alert(temp_buf, 10.0);
         }
         default:
             fprintf(stderr, "Invalid msg code in process_server_command() (%d).\n", code);

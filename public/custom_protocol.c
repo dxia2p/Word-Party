@@ -26,7 +26,13 @@ bool is_message_complete(char *msg, int msg_len) {
 
 // includes msg_end in the length
 int get_msg_len(char *msg) {  // TODO: FIX UNDEFINED BEHAVIOUR WHEN MSG_END IS NOT IN MSG
-    return (strchr(msg, MSG_END) - msg) + 1;
+    static int MAX_CHECK_NUM = 512;
+    for (int i = 0; i < MAX_CHECK_NUM; i++) {
+        if (msg[i] == MSG_END) {
+            return i + 1;
+        }
+    }
+    return -1;
 }
 
 char get_msg_code(char *msg){

@@ -61,7 +61,8 @@ void message_enqueue(struct message_queue *mq, char *msg, int msg_len) {  // enq
     }
 
     if ((tail + 1) % MESSAGE_QUEUE_LEN != head) {
-        strncpy(mq->buffer[tail], msg, msg_len);
+        //strncpy(mq->buffer[tail], msg, msg_len);
+        memcpy(mq->buffer[tail], msg, msg_len);
         mq->buffer_lengths[tail] = msg_len;
         atomic_store(&mq->tail, (tail + 1) % MESSAGE_QUEUE_LEN);
         write(mq->pipe[1], "x", 1);
@@ -81,7 +82,8 @@ int message_dequeue(struct message_queue *mq, char *dest, int dest_max_len) {
             fprintf(stderr, "destination length is insufficient in message_dequeue()\n");
             return -1;
         }
-        strncpy(dest, mq->buffer[head], buf_len);
+        // strncpy(dest, mq->buffer[head], buf_len);
+        memcpy(dest, mq->buffer[head], buf_len);
         atomic_store(&mq->head, (head + 1) % MESSAGE_QUEUE_LEN);
         char buf[1];
         read(mq->pipe[0], buf, 1);

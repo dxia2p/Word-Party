@@ -51,14 +51,24 @@ char *get_random_required_substr() {
 }
 
 // Words are separated by newline
-void initialize_wordlist(char *filepath, unsigned long lines_in_wordlist) {
+void initialize_wordlist(char *filepath) {
     
     FILE *fptr = fopen(filepath, "r");
     if (fptr == NULL) {
         fprintf(stderr, "fopen() in initialize_wordlist() failed.\n");
         return;
     }
-    word_set = set_create((unsigned long)(lines_in_wordlist * 1.3));
+
+    unsigned long lines = 0;
+    while (!feof(fptr)) {
+        char ch = fgetc(fptr);
+        if (ch == '\n') {
+            lines++;
+        }
+    }
+    rewind(fptr);
+
+    word_set = set_create((unsigned long)(lines * 1.3));
     char buf[MAX_WORD_LEN];
 
     while (fgets(buf, MAX_WORD_LEN, fptr) != NULL) {
@@ -76,12 +86,12 @@ void initialize_wordlist(char *filepath, unsigned long lines_in_wordlist) {
     printf("Initialized wordlist. (size: %lu)\n", set_get_size(word_set));
 }
 
+/* the word must be in wordlist and contain substr*/
 bool word_is_valid(char *word, char *substr) {
     
-    if (strstr(word, substr) == NULL) {  // The word must contain the substring specified
+    if (strstr(word, substr) == NULL) {
         return false;
     }
-    
 
     if (set_contains(word_set, word)) {
         return true;

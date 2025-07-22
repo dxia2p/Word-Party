@@ -55,12 +55,6 @@ void* networking_main_routine(void *queue_group) {
     if (get_read_pipe(read_queue) > max_socket) {
         max_socket = get_read_pipe(read_queue);
     }
-    //FD_SET(STDIN_FILENO, &master);
-    /*
-    if (STDIN_FILENO > max_socket) {
-        max_socket = STDIN_FILENO;
-    }
-    */
 
     char mq_buf[512];
     char recv_buf[512];
@@ -219,8 +213,18 @@ struct client_data *create_client_data(SOCKET s) {
     struct client_data *temp = calloc(1, sizeof(struct client_data));
     temp->sock = s;
     temp->rb = create_receive_buffer();
-    temp->next = clients;  // Add temp to client list
-    clients = temp;
+    temp->next = NULL; 
+
+    if (clients == NULL) {
+        clients = temp;
+        return temp;
+    }
+
+    struct client_data *cur = clients;
+    while (cur->next != NULL) {
+        cur = cur->next;
+    }
+    cur->next = temp;
     return temp;
 }
 
@@ -286,6 +290,11 @@ static void process_client_command(char *msg, struct client_data *cd) {
             int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_CHANGED_NAME, &NET_PROT_FMT_STR_STORAGE, cd->sock, recv_str);
             send_to_all(send_buf, msg_size);
             break;
+        } case N_SEND_WORD: {
+            parse_msg_body(msg, &NET_PROT_FMT_STR_STORAGE, recv_str);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), T_SEND_WORD, &THREAD_PROT_FMT_STR_STORAGE, cd->sock, recv_str);
+            message_enqueue(write_queue, send_buf, msg_size);
+            break;
         }
         default:
             fprintf(stderr, "Invalid msg code in process_client_command() (%d)\n", code);
@@ -322,6 +331,31 @@ static void process_thread_command(char *msg) {
             int id;
             parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);
             int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_TURN, &NET_PROT_FMT_STR_STORAGE, id);
+            send_to_all(send_buf, msg_size);
+            break;
+        } case T_CORRECT_WORD: {
+            int id;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id, recv_str);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_CORRECT_WORD, &NET_PROT_FMT_STR_STORAGE, id, recv_str);
+            send_to_all(send_buf, msg_size);
+            break;
+        }
+        case T_INCORRECT_WORD: {
+            int id;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_INCORRECT_WORD, &NET_PROT_FMT_STR_STORAGE, id);
+            send_to_all(send_buf, msg_size);
+            break;
+        } case T_LOSE_HP: {
+            int id;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_LOSE_HP, &NET_PROT_FMT_STR_STORAGE, id);
+            send_to_all(send_buf, msg_size);
+            break;
+        } case T_PLAYER_WON: {
+            int id;
+            parse_msg_body(msg, &THREAD_PROT_FMT_STR_STORAGE, &id);
+            int msg_size = create_msg(send_buf, sizeof(send_buf), N_PLAYER_WON, &NET_PROT_FMT_STR_STORAGE, id);
             send_to_all(send_buf, msg_size);
             break;
         }

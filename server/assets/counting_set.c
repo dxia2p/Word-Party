@@ -7,8 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
-
-#include "set.h"
+#include "counting_set.h"
 
 unsigned long djb2_hash(char *str) {
     unsigned long hash = 5381;
@@ -23,26 +22,27 @@ unsigned long djb2_hash(char *str) {
 
 struct hash_node {
     char *val;
+    int count;
     struct hash_node *next;
 };
 
-struct set {
+struct c_set {
     unsigned long size;
     unsigned long bucket_num;
     struct hash_node **buckets;
 };
 
 
-struct set *set_create(unsigned long bucket_num) {  // remember to make bucket_num 30% larger than number of expected elements
-    struct set *s = calloc(1, sizeof(struct set));
+struct c_set *c_set_create(unsigned long bucket_num) {  // remember to make bucket_num 30% larger than number of expected elements
+    struct c_set *s = calloc(1, sizeof(struct c_set));
     if (s == NULL) {
-        fprintf(stderr, "calloc() failed for set in set_create()\n");
+        fprintf(stderr, "calloc() failed for set in c_set_create()\n");
         return NULL;
     }
 
     s->buckets = calloc(bucket_num, sizeof(struct hash_node*));
     if (s->buckets == NULL) {
-        fprintf(stderr, "calloc() failed for (%lu) buckets in set_create()\n", bucket_num);
+        fprintf(stderr, "calloc() failed for (%lu) buckets in c_set_create()\n", bucket_num);
         return NULL;
     }
 
@@ -52,7 +52,7 @@ struct set *set_create(unsigned long bucket_num) {  // remember to make bucket_n
 }
 
 
-void set_insert(struct set *s, char *str) {
+void c_set_insert(struct c_set *s, char *str) {
     unsigned long hash = djb2_hash(str);
     hash %= s->bucket_num;
 
@@ -66,6 +66,7 @@ void set_insert(struct set *s, char *str) {
         fprintf(stderr, "strdup() failed in set_insert().\n");
         return;
     }
+    hn->count = 1;
 
     if (s->buckets[hash] == NULL) {
         s->buckets[hash] = hn;
@@ -74,6 +75,7 @@ void set_insert(struct set *s, char *str) {
         struct hash_node *cur = s->buckets[hash];
         while (cur != NULL) {
             if (strcmp(cur->val, str) == 0) {  // str already exists!
+                cur->count++;
                 return;
             }
             cur = cur->next;
@@ -86,7 +88,7 @@ void set_insert(struct set *s, char *str) {
     s->size++;
 }
 
-bool set_contains(struct set *s, char *str) {
+bool c_set_contains(struct c_set *s, char *str) {
     unsigned long hash = djb2_hash(str);
     hash %= s->bucket_num;
 
@@ -101,6 +103,20 @@ bool set_contains(struct set *s, char *str) {
     return false;
 }
 
-unsigned long set_get_size(struct set *s) {
+int c_set_get_count(struct c_set *s, char *str) {
+    unsigned long hash = djb2_hash(str);
+    hash %= s->bucket_num;
+
+    struct hash_node *cur = s->buckets[hash];
+    while(cur != NULL) {
+        if (strcmp(cur->val, str) == 0) {
+            return cur->count;
+        }
+        cur = cur->next;
+    }
+    return 0;
+}
+
+unsigned long c_set_get_size(struct c_set *s) {
     return s->size;
 }

@@ -5,8 +5,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <string.h>
 
-int main() {
+int main( int argc, char *argv[]) {
     struct message_queue *network_to_logic_queue = create_message_queue();
     struct message_queue *logic_to_network_queue = create_message_queue();
     struct message_queue_group networking_queue_group;
@@ -18,7 +19,12 @@ int main() {
     logic_queue_group.write_q = logic_to_network_queue;
 
     bool game_running = true;
-    game_init(&logic_queue_group);
+
+    if (argc > 1 && strcmp(argv[1], "test") == 0) {
+        game_init(&logic_queue_group, true);
+    } else {
+        game_init(&logic_queue_group, false);
+    }
 
     pthread_t networking_thread;
     if (pthread_create(&networking_thread, NULL, &networking_main_routine, &networking_queue_group) != 0) {
