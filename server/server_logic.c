@@ -57,11 +57,11 @@ void game_init(struct message_queue_group *queue_group, bool test) {
     srand(time(NULL));
 
     if (test) {
-        if (!initialize_substr_list("../server/assets/substr_list.txt")) exit(1);
-        if (!initialize_wordlist("../server/assets/wordlist2.txt")) exit(1);
+        if (!initialize_substr_list("../server/word_substr_generator/substr_list.txt")) exit(1);
+        if (!initialize_wordlist("../server/word_substr_generator/wordlist2.txt")) exit(1);
     } else {
-        if (!initialize_substr_list("assets/substr_list.txt")) exit(1);
-        if (!initialize_wordlist("assets/wordlist2.txt")) exit(1);
+        if (!initialize_substr_list("word_substr_generator/substr_list.txt")) exit(1);
+        if (!initialize_wordlist("word_substr_generator/wordlist2.txt")) exit(1);
     }
 }
 
