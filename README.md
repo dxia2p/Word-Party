@@ -5,7 +5,7 @@ This game was inspired by JKLM's Bomb Party.
 ![game preview](Preview_img3.png)
 
 ## Download
-[](https://github.com/dxia2p/Word-Party/tags)
+[Download here](https://github.com/dxia2p/Word-Party/tags)
 
 ## How do I run the game?
 Note: This game only works on linux at the moment\
