@@ -12,6 +12,9 @@ Note: This game only works on linux at the moment\
 Run `./server` in your terminal followed by `./client`. Enter the IP address of the computer the server is running on and enter "8080" for the port. If you're playing with people over the internet you may need to port forward.
 
 ## How its made:
+- This project was made from scratch in C with the built-in socket API, POSIX threads, and select for multiplexing.
+- 
 
-## Lessons Learned
-This was my first relatively large project using C
+## Lessons Learned:
+- This was my first relatively large project using C, and I learned a lot about project organization and networking concepts
+- 
