@@ -18,6 +18,9 @@ Run `./server` in your terminal followed by `./client`. Enter the IP address of 
   - "Values" in the body are delimited by the '&' symbol and the message is terminated by '$'
   - Each message code (the byte at the beginning) corresponds to a format string which is used by the sender and receiver to format their data
 - The server uses a message queue (made with c11's atomics) to send data between the networking thread and the game logic thread
+- The server's logic thread runs 30 times a second while the networking thread only runs when there are messages in the message queue or from the client
+- The server validates words sent by the client using strstr() and by checking the word against a set containing around ~260000 words from a wordlist
+  - The set was implemented with a hash table and the simple djb2 hash function
 
 ## Lessons Learned:
 - This was my first relatively large project using C, and I learned a lot about project organization and networking concepts
