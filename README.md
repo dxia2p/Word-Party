@@ -12,8 +12,8 @@ Note: This game only works on linux at the moment\
 Run `./server` in your terminal followed by `./client`. Enter the IP address of the computer the server is running on and enter "8080" for the port. If you're playing with people over the internet you may need to port forward.
 
 ## How I made it:
-- This project was made from scratch in C with the built-in socket API, POSIX threads, and select for multiplexing.
-- Functions needed by both the server and client are stored in the "public" folder, such as sending/receiving logic and a parser for the custom protocol they use
+- This project was made from scratch in C with the Berkeley Sockets API, POSIX threads, and select for multiplexing.
+- Functions needed by both the server and client are stored in the "public" folder, such as sending/receiving logic and a parser for the custom protocol I designed for them
   - The protocol begins with a byte denoting what type of message it is, all subsequent data is a part of the body
   - "Values" in the body are delimited by the '&' symbol and the message is terminated by '$'
   - Each message code (the byte at the beginning) corresponds to a format string which is used by the sender and receiver to format their data
