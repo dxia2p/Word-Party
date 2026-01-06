@@ -6,19 +6,19 @@ client_objects = out/client.o
 all: bin/server bin/client
 
 bin/client: $(client_objects) $(public_objects)
-	$(compiler) $^ -o $@ -Wall -g
+	$(compiler) $^ -o $@ -Wall -g -Wall
 $(client_objects): out/%.o: client/%.c public/*.h
-	$(compiler) -c $(filter %.c,$^) -o $@ -g
+	$(compiler) -c $(filter %.c,$^) -o $@ -g -Wall
 
 bin/server: $(server_objects) $(public_objects)
-	$(compiler) $^ -o $@ -Wall -g
+	$(compiler) $^ -o $@ -Wall -g -Wall
 $(server_objects): out/%.o: server/%.c public/*.h server/*.h
-	$(compiler) -c $(filter %.c,$^) -o $@ -g
+	$(compiler) -c $(filter %.c,$^) -o $@ -g -Wall
 
 
 
 $(public_objects): out/%.o: public/%.c public/*.h
-	$(compiler) -c $(filter %.c,$^) -o $@ -g
+	$(compiler) -c $(filter %.c,$^) -o $@ -g -Wall
 
 
 clean:
